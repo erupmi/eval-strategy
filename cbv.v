@@ -904,3 +904,76 @@ Lemma wmireduce_implies_treduce : forall t1 t2,
     wmireduce t1 t2 -> treduce t1 t2.
 Proof with eauto using mreduce_implies_treduce.
   intros. induction H... Qed.
+
+Inductive ctx : Type :=
+| ctxHole: ctx
+| ctxLam: ctx -> ctx
+| ctxApp1: tm -> ctx -> ctx
+| ctxApp2: ctx -> tm -> ctx.
+
+Fixpoint fill_context C t :=
+  match C with
+  | ctxHole => t
+  | ctxLam C' => tm_abs (fill_context C' t)
+  | ctxApp1 t1 C' => tm_app t1 (fill_context C' t)
+  | ctxApp2 C' t2 => tm_app (fill_context C' t) t2
+  end.  
+
+Lemma mreduce_app2: forall t1 t2 t2',
+    mreduce t2 t2' -> mreduce (tm_app t1 t2) (tm_app t1 t2').
+Proof with eauto.
+  intros. induction H...
+  - apply multi_R. econstructor.
+  - eapply multi_trans. apply multi_R.
+    apply Red_App1... assumption.
+Qed.
+
+Lemma mreduce_app1: forall t1 t1' t2,
+    mreduce t1 t1' -> mreduce (tm_app t1 t2) (tm_app t1' t2).
+Proof with eauto.
+  intros. induction H...
+  - apply multi_R. econstructor.
+  - eapply multi_trans. apply multi_R.
+    apply Red_App1... assumption.
+Qed.
+
+Lemma mreduce_abs: forall t1 t1',
+    mreduce t1 t1' -> mreduce (tm_abs t1) (tm_abs t1').
+Proof with eauto.
+  intros. induction H...
+  - apply multi_R. econstructor.
+  - eapply multi_trans. apply multi_R.
+    apply Red_Body... assumption.
+Qed.
+
+Lemma context_mreduce: forall C t1 t2,
+    mreduce t1 t2 -> mreduce (fill_context C t1) (fill_context C t2).
+Proof with eauto.
+  induction C; intros; simpl in *;
+    eauto using mreduce_abs, mreduce_app2, mreduce_app1. 
+Qed.
+
+Lemma contextual_equivalence: forall C t1 t2,
+    mstep t1 t2 -> halt (fill_context C t1) <-> halt (fill_context C t2).
+Proof with eauto using
+           value_halt, mreduce_preserves_halt, mreduce_inv_preserves_halt.
+  induction C; split; simpl in *;
+    apply mstep_implies_mreduce in H as H';
+    intros...
+  - inversion H0; subst.
+    eapply mreduce_preserves_halt...
+    apply mreduce_app2.
+    apply context_mreduce...
+  - inversion H0; subst.
+    eapply mreduce_inv_preserves_halt...
+    apply mreduce_app2.
+    apply context_mreduce...
+  - inversion H0; subst.
+    eapply mreduce_preserves_halt...
+    apply mreduce_app1.
+    apply context_mreduce...
+  - inversion H0; subst.
+    eapply mreduce_inv_preserves_halt...
+    apply mreduce_app1.
+    apply context_mreduce...
+Qed.
